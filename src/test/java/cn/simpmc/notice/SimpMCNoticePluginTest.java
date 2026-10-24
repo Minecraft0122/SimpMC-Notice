@@ -8,9 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -120,6 +122,33 @@ class SimpMCNoticePluginTest {
     }
 
     @Test
+    void automaticallyMakesHttpAndHttpsLinksClickableWithoutCapturingPunctuation() {
+        String firstUrl = "https://example.com/path_(with-brackets)?color=&answer=42";
+        String secondUrl = "http://localhost:8080/rules";
+        String thirdUrl = "https://example.com/?value=a:b";
+        Component result = SimpMCNoticePlugin.parseFormattedText(
+                "&a官网：" + firstUrl + ".\n规则见 " + secondUrl + "! " + thirdUrl);
+
+        assertEquals(
+                List.of(
+                        ClickEvent.openUrl(firstUrl),
+                        ClickEvent.openUrl(secondUrl),
+                        ClickEvent.openUrl(thirdUrl)),
+                clickEvents(result));
+        assertEquals(
+                "§a官网：" + firstUrl + ".\n规则见 " + secondUrl + "! " + thirdUrl,
+                LEGACY_SECTIONS.serialize(result));
+    }
+
+    @Test
+    void leavesNonHttpLinksWithoutClickEvents() {
+        Component result = SimpMCNoticePlugin.parseFormattedText(
+                "ftp://example.com mailto:staff@example.com");
+
+        assertTrue(clickEvents(result).isEmpty());
+    }
+
+    @Test
     void normalizesReversedAndInvalidIntervals() {
         assertEquals(
                 new SimpMCNoticePlugin.Interval(30, 90),
@@ -210,5 +239,19 @@ class SimpMCNoticePluginTest {
                             description.getCommands().get("noticereload").get("description"))
                     .contains("玩家加入消息"));
         }
+    }
+
+    private static List<ClickEvent> clickEvents(Component component) {
+        List<ClickEvent> events = new ArrayList<>();
+        collectClickEvents(component, events);
+        return events;
+    }
+
+    private static void collectClickEvents(Component component, List<ClickEvent> events) {
+        ClickEvent clickEvent = component.style().clickEvent();
+        if (clickEvent != null) {
+            events.add(clickEvent);
+        }
+        component.children().forEach(child -> collectClickEvents(child, events));
     }
 }

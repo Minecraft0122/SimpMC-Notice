@@ -110,7 +110,7 @@ separator: " "
 - MiniMessage：`<red>`、`<#12ABEF>`、`<gradient:red:blue>渐变</gradient>`
 - 换行：`\n`、`<newline>`
 
-前缀颜色会延续到后续正文，正文中的新颜色可以覆盖它。MiniMessage 仅开放文字格式，不允许点击命令、悬浮事件或 NBT 等交互标签。
+前缀颜色会延续到后续正文，正文中的新颜色可以覆盖它。消息中的 `http://` 和 `https://` 链接会自动添加打开链接事件。MiniMessage 仅开放文字格式，不允许点击命令、悬浮事件或 NBT 等交互标签；链接点击后是否弹出确认由客户端设置决定。
 
 ## 自行构建
 

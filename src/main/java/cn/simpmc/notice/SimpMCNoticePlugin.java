@@ -1,6 +1,7 @@
 package cn.simpmc.notice;
 
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -11,8 +12,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.random.RandomGenerator;
 import java.util.regex.Matcher;
+import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextReplacementConfig;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.minimessage.tag.standard.StandardTags;
@@ -52,6 +57,7 @@ public final class SimpMCNoticePlugin extends JavaPlugin implements TabExecutor,
             Pattern.compile("(?i)&#([0-9a-f]{6})");
     private static final Pattern LEGACY_CODE =
             Pattern.compile("(?i)&([0-9a-fk-or])");
+    private static final Pattern URL = Pattern.compile("(?i)\\bhttps?://[^\\s<>\"']+");
     private static final Pattern TRAILING_STYLE_BOUNDARY = Pattern.compile(
             "(?i)(?:(?:&|§)r|<reset>|</(?:#[0-9a-f]{6}|[a-z_][a-z0-9_-]*(?::[^>]*)?)>)+$");
 
@@ -425,7 +431,11 @@ public final class SimpMCNoticePlugin extends JavaPlugin implements TabExecutor,
     }
 
     static Component parseFormattedText(String text) {
-        return MINI_MESSAGE.deserialize(convertLegacyCodes(expandEscapedNewlines(text)));
+        Component parsed = MINI_MESSAGE.deserialize(convertLegacyCodes(expandEscapedNewlines(text)));
+        return parsed.replaceText(TextReplacementConfig.builder()
+                .match(URL)
+                .replacement(SimpMCNoticePlugin::linkifyUrl)
+                .build());
     }
 
     static String expandEscapedNewlines(String text) {
@@ -433,9 +443,78 @@ public final class SimpMCNoticePlugin extends JavaPlugin implements TabExecutor,
     }
 
     static String convertLegacyCodes(String text) {
+        Matcher urls = URL.matcher(text);
+        StringBuilder result = new StringBuilder();
+        int previousEnd = 0;
+        while (urls.find()) {
+            result.append(convertLegacyCodesInText(text.substring(previousEnd, urls.start())));
+            result.append(urls.group());
+            previousEnd = urls.end();
+        }
+        return result.append(convertLegacyCodesInText(text.substring(previousEnd))).toString();
+    }
+
+    private static String convertLegacyCodesInText(String text) {
         String converted = replaceBungeeHex(text);
         converted = replacePattern(converted, AMPERSAND_HEX, match -> "<#" + match.group(1) + ">");
         return replacePattern(converted, LEGACY_CODE, match -> legacyTag(match.group(1).charAt(0)));
+    }
+
+    private static Component linkifyUrl(MatchResult match, TextComponent.Builder builder) {
+        String matched = match.group();
+        String url = trimTrailingUrlPunctuation(matched);
+        if (!isHttpUrl(url)) {
+            return builder.content(matched).build();
+        }
+
+        String trailingText = matched.substring(url.length());
+        return builder.content("")
+                .append(Component.text(url).clickEvent(ClickEvent.openUrl(url)))
+                .append(Component.text(trailingText))
+                .build();
+    }
+
+    private static String trimTrailingUrlPunctuation(String value) {
+        int end = value.length();
+        while (end > 0 && ".,!?;".indexOf(value.charAt(end - 1)) >= 0) {
+            end--;
+        }
+        while (end > 0) {
+            char closing = value.charAt(end - 1);
+            char opening = switch (closing) {
+                case ')' -> '(';
+                case ']' -> '[';
+                case '}' -> '{';
+                default -> '\0';
+            };
+            if (opening == '\0'
+                    || countCharacter(value, closing, end) <= countCharacter(value, opening, end)) {
+                break;
+            }
+            end--;
+        }
+        return value.substring(0, end);
+    }
+
+    private static int countCharacter(String value, char character, int end) {
+        int count = 0;
+        for (int index = 0; index < end; index++) {
+            if (value.charAt(index) == character) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static boolean isHttpUrl(String value) {
+        try {
+            URI uri = URI.create(value);
+            String scheme = uri.getScheme();
+            return uri.getHost() != null
+                    && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private static String replaceBungeeHex(String text) {

@@ -1,5 +1,6 @@
 # SimpMC-Notice 的三个内容库、自动公告与玩家加入消息。
 # 所有文本都支持传统 & 颜色、&#RRGGBB、&x&R&R&G&G&B&B、MiniMessage 和 \\n 换行。
+# HTTP/HTTPS 链接会自动添加点击打开事件；MiniMessage 点击命令等交互标签不开放。
 
 # 1. 随机前缀库：供自动公告和 /noti 使用。
 random-prefixes:
